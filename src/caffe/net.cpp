@@ -40,6 +40,7 @@ template <typename Dtype>
 void Net<Dtype>::Init(const NetParameter& in_param) {
   CHECK(Caffe::root_solver() || root_net_)
       << "root_net_ needs to be set for all non-root solvers";
+  iter_ = 0;
   // Set phase from the state.
   phase_ = in_param.state().phase();
   // Filter layers based on their include/exclude rules and
@@ -114,6 +115,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     // specified fewer than the required number (as specified by
     // ExactNumTopBlobs() or MinTopBlobs()), allocate them here.
     Layer<Dtype>* layer = layers_[layer_id].get();
+    layer->SetNet(this);
     if (layer->AutoTopBlobs()) {
       const int needed_num_top =
           std::max(layer->MinTopBlobs(), layer->ExactNumTopBlobs());
@@ -163,7 +165,8 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     for (int param_id = 0; param_id < num_param_blobs; ++param_id) {
       const ParamSpec* param_spec = (param_id < param_size) ?
           &layer_param.param(param_id) : &default_param_spec;
-      const bool param_need_backward = param_spec->lr_mult() != 0;
+      bool param_need_backward = param_spec->lr_mult() != 0;
+      if (!layer->AllowBackward()) param_need_backward = false;      
       need_backward |= param_need_backward;
       layers_[layer_id]->set_param_propagate_down(param_id,
                                                   param_need_backward);
@@ -171,6 +174,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     for (int param_id = 0; param_id < num_param_blobs; ++param_id) {
       AppendParam(param, layer_id, param_id);
     }
+    if (!layer->AllowBackward()) need_backward = false;      
     // Finally, set the backward flag
     layer_need_backward_.push_back(need_backward);
     if (need_backward) {

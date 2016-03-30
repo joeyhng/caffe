@@ -19,6 +19,9 @@ namespace boost { class mutex; }
 
 namespace caffe {
 
+template <typename Dtype> class Net;
+
+
 /**
  * @brief An interface for the units of computation which can be composed into a
  *        Net.
@@ -38,7 +41,7 @@ class Layer {
    * layer.
    */
   explicit Layer(const LayerParameter& param)
-    : layer_param_(param), is_shared_(false) {
+    : layer_param_(param), is_shared_(false), net_(NULL) {
       // Set phase and copy blobs (if there are any).
       phase_ = param.phase();
       if (layer_param_.blobs_size() > 0) {
@@ -114,6 +117,14 @@ class Layer {
     CHECK(ShareInParallel() || !is_shared)
         << type() << "Layer does not support sharing.";
     is_shared_ = is_shared;
+  }
+
+  // Added from FlowNet
+  inline void SetNet(Net<Dtype> *net) {
+    this->net_ = net;
+  }
+  inline Net<Dtype>* GetNet() {
+    return this->net_;
   }
 
   /**
@@ -295,6 +306,16 @@ class Layer {
   }
 
   /**
+   * @brief By Alexey: return whether to allow backward for this layer
+   *
+   * If AllowBackward = false, this layer will never do backward
+   */
+  virtual inline bool AllowBackward() const {
+    return true;
+  }
+
+
+  /**
    * @brief Specifies whether the layer should compute gradients w.r.t. a
    *        parameter at a particular index given by param_id.
    *
@@ -430,6 +451,10 @@ class Layer {
  private:
   /** Whether this layer is actually shared by other nets*/
   bool is_shared_;
+
+  // From FlowNet
+  /** Pointer to parent Net if existant */
+  Net<Dtype>* net_;
 
   /** The mutex for sequential forward if this layer is shared */
   shared_ptr<boost::mutex> forward_mutex_;
